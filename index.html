@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Valentine Quest</title>
+    <meta
+      name="description"
+      content="A playful escalating mini-game ending in a Valentine reveal."
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="bg-shape bg-shape-a" aria-hidden="true"></div>
+    <div class="bg-shape bg-shape-b" aria-hidden="true"></div>
+
+    <header class="top-controls" aria-label="Utilities">
+      <button id="soundToggle" class="ghost-btn" type="button" aria-pressed="false">
+        Sound: Off
+      </button>
+      <button id="resetBtn" class="ghost-btn" type="button">Reset</button>
+    </header>
+
+    <main id="app" class="app" aria-live="off">
+      <section class="card" id="levelCard" aria-labelledby="levelTitle">
+        <p class="eyebrow" id="levelEyebrow">Level</p>
+        <h1 id="levelTitle">Valentine Quest</h1>
+        <p id="levelPrompt" class="prompt"></p>
+
+        <div id="countdownWrap" class="countdown-wrap hidden" aria-live="polite">
+          <span class="countdown-label">Timer</span>
+          <span id="countdownValue" class="countdown-value">5.0</span>
+        </div>
+
+        <form id="memoryForm" class="memory-form hidden" novalidate>
+          <label for="memoryInput" id="memoryLabel" class="memory-label">Answer</label>
+          <input
+            id="memoryInput"
+            class="memory-input"
+            type="text"
+            autocomplete="off"
+            autocapitalize="none"
+            spellcheck="false"
+            required
+          />
+          <div class="memory-actions">
+            <button id="memorySubmit" class="btn btn-primary" type="submit">Submit</button>
+            <button id="giveUpBtn" class="btn btn-subtle hidden" type="button">
+              I give up
+            </button>
+          </div>
+        </form>
+
+        <div id="buttonRow" class="button-row" role="group" aria-label="Answer options">
+          <button id="yesBtn" class="btn btn-primary" type="button">Yes</button>
+          <button id="noBtn" class="btn btn-secondary" type="button">No</button>
+        </div>
+
+        <div id="finalActions" class="button-row hidden" aria-label="Final actions">
+          <button id="googleCalendarBtn" class="btn btn-secondary" type="button">
+            Add to Google Calendar
+          </button>
+          <button id="calendarBtn" class="btn btn-primary" type="button">
+            Add to Calendar (.ics)
+          </button>
+          <button id="copyBtn" class="btn btn-secondary" type="button">Copy details</button>
+          <button id="shareBtn" class="btn btn-subtle" type="button">Share</button>
+        </div>
+
+        <section id="finalExtras" class="final-extras hidden" aria-label="Final reveal details">
+          <section class="final-block certificate-card" aria-labelledby="certificateHeading">
+            <div class="certificate-head">
+              <h2 id="certificateHeading">Valentine Quest - Completed</h2>
+              <span class="certificate-badge">Certified</span>
+            </div>
+            <p id="certificatePlayer" class="certificate-line"></p>
+            <p id="certificateResult" class="certificate-line"></p>
+            <p id="certificateTime" class="certificate-line"></p>
+            <p id="certificateDodges" class="certificate-line"></p>
+            <p id="certificateCaptcha" class="certificate-line"></p>
+            <p id="certificateRunId" class="certificate-line"></p>
+          </section>
+
+          <section class="final-block" aria-labelledby="summaryHeading">
+            <div class="final-block-head">
+              <h2 id="summaryHeading">Run Summary</h2>
+            </div>
+            <ul id="runSummaryList" class="summary-list"></ul>
+            <div class="button-row compact-row" aria-label="Share summary actions">
+              <button id="copySummaryBtn" class="btn btn-secondary" type="button">Copy run summary</button>
+            </div>
+          </section>
+        </section>
+
+        <p id="hintText" class="hint" aria-hidden="true"></p>
+      </section>
+    </main>
+
+    <div id="modalLayer" class="modal-layer hidden" aria-hidden="true"></div>
+
+    <div id="errorOverlay" class="error-overlay hidden" role="alert" aria-live="assertive">
+      <div class="error-box">
+        <p class="error-title">SYSTEM ERROR</p>
+        <p class="error-sub">Too much romance detected. Rebooting date-night protocol...</p>
+      </div>
+    </div>
+
+    <div id="liveRegion" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+
+    <script src="app.js"></script>
+  </body>
+</html>
