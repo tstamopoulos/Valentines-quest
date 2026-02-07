@@ -7,6 +7,8 @@ const CONFIG = {
     durationHours: 2,
     location: "Elements Bar and Grill Walsh Bay",
     venueQuery: "Elements Bar and Grill Walsh Bay",
+    personName: "Tianna",
+    nickname: "Titi",
   },
   copy: {
     introQuestion: "Will you be my Valentine?",
@@ -15,8 +17,10 @@ const CONFIG = {
     level4Prompt: "Please hold. Decision window loading...",
     level5Prompt: "Memory check:",
     level6Prompt: "Do NOT click YES.",
-    finalLead: "You already finished the hard part.",
-    finalReveal: "You are my Valentine.",
+    finalLead: "Titi... you made it.",
+    finalReveal: "You're my Valentine.",
+    finalPlanLead: "I planned a little night for us.",
+    revealPlanCta: "Reveal the plan",
   },
   memory: {
     question: "What is the name of the first movie we ever watched in the cinema together?",
@@ -29,7 +33,7 @@ const CONFIG = {
   },
   share: {
     template:
-      "Valentine Quest complete. {reveal} {when} at {where}. {summary}",
+      "Valentine Quest ✅\n{nickname} completed it in {duration}\nDodges: {dodges}\nCaptcha attempts: {captcha}\nResult: She's my Valentine 💌\nDetails: {when} - {where}",
   },
   levelSettings: {
     dodgeLimit: 3,
@@ -48,10 +52,13 @@ const state = {
   dodgeCount: 0,
   canClickNoInLevel1: false,
   modalStep: 0,
-  startTime: null,
+  startTimeMs: null,
+  endTimeMs: null,
+  runId: String(Math.floor(1000 + Math.random() * 9000)),
   countdownResult: "unknown",
   memoryAttempts: 0,
   memoryGaveUp: false,
+  captchaAttempts: 0,
   finalRequestId: 0,
 };
 
@@ -81,18 +88,15 @@ const els = {
   googleCalendarBtn: document.getElementById("googleCalendarBtn"),
   calendarBtn: document.getElementById("calendarBtn"),
   copyBtn: document.getElementById("copyBtn"),
-  mapFrame: document.getElementById("mapFrame"),
-  openMapsLink: document.getElementById("openMapsLink"),
-  directionsLink: document.getElementById("directionsLink"),
-  weatherHeading: document.getElementById("weatherHeading"),
-  weatherWhen: document.getElementById("weatherWhen"),
-  weatherStatus: document.getElementById("weatherStatus"),
-  weatherTemp: document.getElementById("weatherTemp"),
-  weatherRain: document.getElementById("weatherRain"),
-  weatherLink: document.getElementById("weatherLink"),
-  runSummaryList: document.getElementById("runSummaryList"),
-  copySummaryBtn: document.getElementById("copySummaryBtn"),
   shareBtn: document.getElementById("shareBtn"),
+  runSummaryList: document.getElementById("runSummaryList"),
+  certificatePlayer: document.getElementById("certificatePlayer"),
+  certificateResult: document.getElementById("certificateResult"),
+  certificateTime: document.getElementById("certificateTime"),
+  certificateDodges: document.getElementById("certificateDodges"),
+  certificateCaptcha: document.getElementById("certificateCaptcha"),
+  certificateRunId: document.getElementById("certificateRunId"),
+  copySummaryBtn: document.getElementById("copySummaryBtn"),
   soundToggle: document.getElementById("soundToggle"),
   resetBtn: document.getElementById("resetBtn"),
   modalLayer: document.getElementById("modalLayer"),
@@ -191,6 +195,7 @@ function resetSharedUI() {
   els.body.classList.remove("final-mode");
   els.buttonRow.classList.remove("hidden");
   els.finalActions.classList.add("hidden");
+  els.finalActions.classList.remove("final-secondary-actions");
   els.finalExtras.classList.add("hidden");
   els.memoryForm.classList.add("hidden");
   els.countdownWrap.classList.add("hidden");
@@ -205,6 +210,7 @@ function resetSharedUI() {
   els.yesBtn.hidden = false;
   els.yesBtn.disabled = false;
   els.prompt.innerHTML = "";
+  els.prompt.classList.remove("final-soft");
   setHint("");
   closeModal();
   els.errorOverlay.classList.add("hidden");
@@ -241,10 +247,13 @@ function gotoLevel(index) {
 function resetExperience() {
   state.dodgeCount = 0;
   state.canClickNoInLevel1 = false;
-  state.startTime = null;
+  state.startTimeMs = null;
+  state.endTimeMs = null;
+  state.runId = String(Math.floor(1000 + Math.random() * 9000));
   state.countdownResult = "unknown";
   state.memoryAttempts = 0;
   state.memoryGaveUp = false;
+  state.captchaAttempts = 0;
   state.finalRequestId += 1;
   gotoLevel(0);
   setHint("Reset complete.");
@@ -565,12 +574,29 @@ function getEventContext() {
     year: "numeric",
     timeZone: CONFIG.final.timeZone,
   });
+  const longDateFormatter = new Intl.DateTimeFormat("en-AU", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: CONFIG.final.timeZone,
+  });
+  const shortNoYearFormatter = new Intl.DateTimeFormat("en-AU", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    timeZone: CONFIG.final.timeZone,
+  });
   const timeFormatter = new Intl.DateTimeFormat("en-AU", {
     hour: "numeric",
     minute: "2-digit",
     hour12: true,
     timeZone: CONFIG.final.timeZone,
   });
+  const placeDisplay = CONFIG.final.location.replace(" Walsh Bay", ", Walsh Bay");
+  const timeText = timeFormatter.format(start).replace(" pm", " pm").replace(" am", " am");
+  const shortWhen = `${shortNoYearFormatter.format(start).replace(",", "")} • ${timeText}`;
+  const longDate = longDateFormatter.format(start);
 
   const whenLine = `${dateFormatter.format(start)} \u2022 ${timeFormatter
     .format(start)
@@ -586,6 +612,10 @@ function getEventContext() {
     mapsDirectionsUrl: `https://www.google.com/maps/dir/?api=1&destination=${venueParam}`,
     weatherSearchUrl: `https://www.google.com/search?q=${encodeURIComponent(`${venueQuery} weather`)}`,
     whenLine,
+    shortWhen,
+    longDate,
+    timeText,
+    placeDisplay,
   };
 }
 
@@ -642,7 +672,12 @@ function openGoogleCalendar() {
 
 function formatDetailText() {
   const event = getEventContext();
-  return `${CONFIG.copy.finalReveal} ${event.whenLine} - ${CONFIG.final.location}.`;
+  return [
+    `${CONFIG.final.personName} (${CONFIG.final.nickname}) \u{1F48C}`,
+    `${event.longDate} \u2014 ${event.timeText}`,
+    event.placeDisplay,
+    CONFIG.copy.finalPlanLead,
+  ].join("\n");
 }
 
 async function copyText(text, successMessage) {
@@ -707,20 +742,35 @@ function countdownSummaryLabel() {
   return "Unknown";
 }
 
+function getElapsedText() {
+  if (!state.startTimeMs) return "0m 00s";
+  const end = state.endTimeMs || Date.now();
+  return formatDuration(end - state.startTimeMs);
+}
+
 function getRunSummaryText() {
-  const elapsed = state.startTime ? formatDuration(Date.now() - state.startTime) : "0m 00s";
+  const event = getEventContext();
+  const elapsed = getElapsedText();
   return [
+    `Valentine Quest ✅`,
+    `${CONFIG.final.nickname} completed it in ${elapsed}`,
     `Dodges: ${state.dodgeCount}`,
-    `Countdown: ${countdownSummaryLabel()}`,
-    `Memory attempts: ${state.memoryAttempts}`,
-    `Used I give up: ${state.memoryGaveUp ? "Yes" : "No"}`,
-    `Total time: ${elapsed}`,
+    `Captcha attempts: ${state.captchaAttempts}`,
+    `Result: She's my Valentine 💌`,
+    `Details: ${event.whenLine} - ${CONFIG.final.location}`,
   ].join("\n");
 }
 
 function populateRunSummary() {
   els.runSummaryList.innerHTML = "";
-  const lines = getRunSummaryText().split("\n");
+  const lines = [
+    `${CONFIG.final.nickname} completed it in ${getElapsedText()}`,
+    `Dodges survived: ${state.dodgeCount}`,
+    `Countdown: ${countdownSummaryLabel()}`,
+    `Memory attempts: ${state.memoryAttempts}${state.memoryGaveUp ? " (used give up)" : ""}`,
+    `Captcha attempts: ${state.captchaAttempts}`,
+    `Run ID: ${state.runId}`,
+  ];
   lines.forEach((line) => {
     const li = document.createElement("li");
     li.textContent = line;
@@ -728,44 +778,61 @@ function populateRunSummary() {
   });
 }
 
-function setupMapWidget() {
-  if (!els.mapFrame) return;
-  const event = getEventContext();
-  els.mapFrame.src = event.mapEmbedUrl;
-  els.openMapsLink.href = event.mapsOpenUrl;
-  els.directionsLink.href = event.mapsDirectionsUrl;
+function populateCertificate() {
+  if (!els.certificatePlayer) return;
+  els.certificatePlayer.textContent = `Player: ${CONFIG.final.personName} (${CONFIG.final.nickname})`;
+  els.certificateResult.textContent = `Result: Accepted`;
+  els.certificateTime.textContent = `Total time: ${getElapsedText()}`;
+  els.certificateDodges.textContent = `Dodges survived: ${state.dodgeCount}`;
+  els.certificateCaptcha.textContent = `Captcha attempts: ${state.captchaAttempts}`;
+  els.certificateRunId.textContent = `Run ID: ${state.runId}`;
 }
 
-function setWeatherText(status, temp, rain) {
-  els.weatherStatus.textContent = status;
-  els.weatherTemp.textContent = temp || "";
-  els.weatherRain.textContent = rain || "";
+function getNextWeatherCheckDateText(eventStart) {
+  const byWindow = new Date(eventStart.getTime() - 14 * 86400000);
+  const byWeek = new Date(Date.now() + 7 * 86400000);
+  const nextCheck = byWindow > byWeek ? byWeek : byWindow;
+  const formatter = new Intl.DateTimeFormat("en-AU", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: CONFIG.final.timeZone,
+  });
+  return formatter.format(nextCheck);
 }
 
-async function loadWeatherWidget() {
+async function loadWeatherInto(container) {
+  const whenEl = container.querySelector("[data-weather-when]");
+  const statusEl = container.querySelector("[data-weather-status]");
+  const tempEl = container.querySelector("[data-weather-temp]");
+  const rainEl = container.querySelector("[data-weather-rain]");
+  const linkEl = container.querySelector("[data-weather-link]");
+
   const requestId = ++state.finalRequestId;
   const event = getEventContext();
-  els.weatherHeading.textContent = `Weather at ${CONFIG.final.time}`;
-  els.weatherWhen.textContent = event.whenLine;
-  els.weatherLink.href = event.weatherSearchUrl;
+  whenEl.textContent = `When: ${event.shortWhen}`;
+  linkEl.href = event.weatherSearchUrl;
 
   const daysUntil = Math.ceil((event.start.getTime() - Date.now()) / 86400000);
 
   if (daysUntil > 16) {
-    setWeatherText(
-      `Forecast becomes available closer to the date. Check again in ${daysUntil} days.`,
-      "",
-      ""
-    );
+    statusEl.textContent = "It's a bit too far ahead for a real forecast - we'll check again closer to the day.";
+    tempEl.textContent = `Next good time to check: ${getNextWeatherCheckDateText(event.start)}`;
+    rainEl.textContent = "";
     return;
   }
 
   if (daysUntil < -1) {
-    setWeatherText("This date has already passed. Open live weather for current conditions.", "", "");
+    statusEl.textContent = "This date has passed - use the live forecast for current weather.";
+    tempEl.textContent = "";
+    rainEl.textContent = "";
     return;
   }
 
-  setWeatherText("Loading forecast...", "", "");
+  statusEl.textContent = "Loading forecast...";
+  tempEl.textContent = "";
+  rainEl.textContent = "";
 
   try {
     const geocodeUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(
@@ -816,38 +883,38 @@ async function loadWeatherWidget() {
     const rain = forecast.hourly.precipitation_probability[idx];
     const status = WEATHER_CODES[code] || "Conditions available";
 
-    setWeatherText(
-      status,
-      Number.isFinite(temp) ? `Temperature: ${Math.round(temp)} C` : "Temperature: unavailable",
-      Number.isFinite(rain) ? `Rain probability: ${Math.round(rain)}%` : "Rain probability: unavailable"
-    );
+    statusEl.textContent = status;
+    tempEl.textContent = Number.isFinite(temp) ? `Temperature: ${Math.round(temp)} C` : "Temperature: unavailable";
+    rainEl.textContent = Number.isFinite(rain) ? `Rain probability: ${Math.round(rain)}%` : "Rain probability: unavailable";
   } catch (err) {
     if (requestId !== state.finalRequestId || levels[state.levelIndex].id !== "final") {
       return;
     }
-    setWeatherText(
-      "Unable to load forecast right now.",
-      "Use the live forecast link for current weather.",
-      ""
-    );
+    statusEl.textContent = "Could not load forecast right now.";
+    tempEl.textContent = "Use the live forecast link for latest weather.";
+    rainEl.textContent = "";
   }
 }
 
 function shareSummaryText() {
   const event = getEventContext();
+  const duration = getElapsedText();
   return CONFIG.share.template
-    .replace("{reveal}", CONFIG.copy.finalReveal)
+    .replace("{nickname}", CONFIG.final.nickname)
+    .replace("{duration}", duration)
+    .replace("{dodges}", String(state.dodgeCount))
+    .replace("{captcha}", String(state.captchaAttempts))
     .replace("{when}", event.whenLine)
     .replace("{where}", CONFIG.final.location)
     .replace("{summary}", getRunSummaryText().replace(/\n/g, " | "));
 }
 
 async function shareRunSummary() {
-  const text = shareSummaryText();
+  const text = formatDetailText();
   if (navigator.share) {
     try {
       await navigator.share({
-        title: "Valentine Quest",
+        title: "The plan, for us.",
         text,
       });
       setHint("Shared.", true);
@@ -856,7 +923,134 @@ async function shareRunSummary() {
       if (err && err.name === "AbortError") return;
     }
   }
-  await copyText(text, "Share is unavailable here. Summary copied instead.");
+  await copyText(text, "Share is unavailable here. Invite copied instead.");
+}
+
+function closeCustomModal(returnFocusEl) {
+  closeModal();
+  if (returnFocusEl) {
+    queueTimeout(() => returnFocusEl.focus(), 16);
+  }
+}
+
+function openPlanModal(triggerEl) {
+  const event = getEventContext();
+  const html = `
+    <div class="modal plan-modal" role="dialog" aria-modal="true" aria-labelledby="planModalTitle">
+      <button type="button" class="btn btn-subtle plan-modal-close" data-plan-close>Close</button>
+      <h2 id="planModalTitle">The plan, for us.</h2>
+      <p class="plan-modal-sub">Saturday night. You and me. Everything else can wait.</p>
+
+      <div class="plan-details-grid">
+        <section class="final-block modal-section" aria-label="Invitation details">
+          <h3 class="section-title">Invitation</h3>
+          <div class="invite-details">
+            <span class="invite-chip">Date: ${event.longDate}</span>
+            <span class="invite-chip">Time: ${event.timeText}</span>
+            <span class="invite-chip">Place: ${event.placeDisplay}</span>
+          </div>
+          <p class="invite-note">I'm excited to take you out, ${CONFIG.final.nickname}.</p>
+        </section>
+
+        <section class="final-block modal-section" aria-label="Where">
+          <h3 class="section-title">Where</h3>
+          <div style="position:relative;">
+            <iframe class="map-frame" title="Map preview for venue" loading="lazy" referrerpolicy="no-referrer-when-downgrade" allowfullscreen data-map-frame></iframe>
+          </div>
+          <div class="button-row compact-row">
+            <a class="btn btn-secondary btn-link" target="_blank" rel="noopener noreferrer" data-maps-open>Open in Google Maps</a>
+            <a class="btn btn-primary btn-link" target="_blank" rel="noopener noreferrer" data-maps-directions>Directions</a>
+          </div>
+          <p class="sub-note">If the map preview doesn't load, those buttons will work every time.</p>
+          <p class="map-fallback hidden" data-map-fallback>Map preview blocked on this browser. The buttons above still work.</p>
+        </section>
+
+        <section class="final-block modal-section" aria-label="Weather at 6:00pm">
+          <h3 class="section-title">Weather (around ${event.timeText})</h3>
+          <p class="weather-when" data-weather-when></p>
+          <p class="weather-status" data-weather-status>Loading forecast...</p>
+          <p class="weather-line" data-weather-temp></p>
+          <p class="weather-line" data-weather-rain></p>
+          <a class="btn btn-secondary btn-link weather-link-btn" target="_blank" rel="noopener noreferrer" data-weather-link>Check live forecast</a>
+        </section>
+
+        <section class="final-block modal-section" aria-label="Actions">
+          <h3 class="section-title">Save it</h3>
+          <div class="button-row compact-row">
+            <button type="button" class="btn btn-secondary" data-action-google>Add to Google Calendar</button>
+            <button type="button" class="btn btn-primary" data-action-ics>Add to Calendar (.ics)</button>
+            <button type="button" class="btn btn-secondary" data-action-copy>Copy details</button>
+            <button type="button" class="btn btn-subtle" data-action-share>Share</button>
+          </div>
+          <p class="sub-note">If you want, save it now so it's locked in.</p>
+        </section>
+      </div>
+      <p class="modal-footer-note">P.S. I hope you smiled at least once getting here.</p>
+    </div>
+  `;
+
+  els.modalLayer.innerHTML = html;
+  els.modalLayer.classList.remove("hidden");
+  els.modalLayer.setAttribute("aria-hidden", "false");
+
+  const modal = els.modalLayer.querySelector(".plan-modal");
+  const closeBtn = modal.querySelector("[data-plan-close]");
+  const frame = modal.querySelector("[data-map-frame]");
+  const openLink = modal.querySelector("[data-maps-open]");
+  const directionsLink = modal.querySelector("[data-maps-directions]");
+  const mapFallback = modal.querySelector("[data-map-fallback]");
+
+  frame.src = event.mapEmbedUrl;
+  openLink.href = event.mapsOpenUrl;
+  directionsLink.href = event.mapsDirectionsUrl;
+
+  frame.addEventListener("error", () => mapFallback.classList.remove("hidden"));
+  frame.addEventListener("load", () => mapFallback.classList.add("hidden"));
+
+  modal.querySelector("[data-action-ics]").addEventListener("click", downloadIcs);
+  modal.querySelector("[data-action-google]").addEventListener("click", openGoogleCalendar);
+  modal.querySelector("[data-action-copy]").addEventListener("click", copyDetails);
+  modal.querySelector("[data-action-share]").addEventListener("click", shareRunSummary);
+
+  loadWeatherInto(modal);
+
+  const focusables = Array.from(
+    modal.querySelectorAll('button,[href],input,select,textarea,[tabindex]:not([tabindex="-1"])')
+  );
+  const keyHandler = (eventKey) => {
+    if (eventKey.key === "Escape") {
+      eventKey.preventDefault();
+      closeWithCleanup();
+      return;
+    }
+    if (eventKey.key !== "Tab" || focusables.length === 0) return;
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+    if (eventKey.shiftKey && document.activeElement === first) {
+      eventKey.preventDefault();
+      last.focus();
+    } else if (!eventKey.shiftKey && document.activeElement === last) {
+      eventKey.preventDefault();
+      first.focus();
+    }
+  };
+
+  const overlayClickHandler = (eventClick) => {
+    if (eventClick.target === els.modalLayer) {
+      closeWithCleanup();
+    }
+  };
+
+  const closeWithCleanup = () => {
+    modal.removeEventListener("keydown", keyHandler);
+    els.modalLayer.removeEventListener("click", overlayClickHandler);
+    closeCustomModal(triggerEl);
+  };
+
+  closeBtn.addEventListener("click", closeWithCleanup);
+  modal.addEventListener("keydown", keyHandler);
+  els.modalLayer.addEventListener("click", overlayClickHandler);
+  closeBtn.focus();
 }
 
 const levels = [
@@ -871,8 +1065,8 @@ const levels = [
       setHint("You can totally choose either option.");
     },
     init() {
-      if (!state.startTime) {
-        state.startTime = Date.now();
+      if (!state.startTimeMs) {
+        state.startTimeMs = Date.now();
       }
       const nearThreshold = 78;
 
@@ -1267,56 +1461,219 @@ const levels = [
     },
   },
   {
+    id: "l8",
+    render() {
+      setPrompt("");
+      els.buttonRow.classList.add("hidden");
+      els.prompt.innerHTML = `
+        <section class="captcha-shell" aria-labelledby="captchaTitle">
+          <h2 id="captchaTitle" class="captcha-title">Quick verification for ${CONFIG.final.nickname}</h2>
+          <p class="captcha-sub">One last thing - promise this isn't a robot.</p>
+          <button id="captchaCheck" class="captcha-row btn btn-subtle" type="button" aria-pressed="false">
+            <span class="captcha-check" aria-hidden="true"></span>
+            <span>I am not a robot</span>
+            <span id="captchaSpinner" class="captcha-spinner hidden" aria-hidden="true"></span>
+          </button>
+          <div id="captchaChallenge" class="captcha-challenge hidden">
+            <p class="captcha-sub">Select all squares with green flags.</p>
+            <p class="captcha-legend">Green flag = healthy choice.</p>
+            <div id="captchaGrid" class="captcha-grid" role="group" aria-label="Captcha tiles"></div>
+            <div class="captcha-actions">
+              <button id="captchaVerify" class="btn btn-primary" type="button">Verify</button>
+            </div>
+          </div>
+        </section>
+      `;
+      setHint(`Almost there, ${CONFIG.final.nickname}.`);
+    },
+    init() {
+      const checkBtn = document.getElementById("captchaCheck");
+      const spinner = document.getElementById("captchaSpinner");
+      const challenge = document.getElementById("captchaChallenge");
+      const grid = document.getElementById("captchaGrid");
+      const verifyBtn = document.getElementById("captchaVerify");
+      const iconSvg = {
+        greenFlag: `
+          <svg class="captcha-icon captcha-icon-green" viewBox="0 0 36 36" role="img" aria-label="Green flag">
+            <path d="M10 6v24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>
+            <path d="M11 7.5h14.5c1.1 0 1.7 1.4 0.9 2.2l-2.8 3.1 2.8 3.1c0.8 0.8 0.2 2.2-0.9 2.2H11z" fill="currentColor" opacity="0.95"/>
+          </svg>
+        `,
+        grayFlag: `
+          <svg class="captcha-icon captcha-icon-gray" viewBox="0 0 36 36" role="img" aria-label="Grey flag">
+            <path d="M10 6v24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>
+            <path d="M11 7.5h14.5c1.1 0 1.7 1.4 0.9 2.2l-2.8 3.1 2.8 3.1c0.8 0.8 0.2 2.2-0.9 2.2H11z" fill="currentColor" opacity="0.95"/>
+          </svg>
+        `,
+        heart: `
+          <svg class="captcha-icon captcha-icon-heart" viewBox="0 0 36 36" role="img" aria-label="Heart outline">
+            <path d="M18 29s-9.5-5.6-9.5-12.2c0-3.2 2.4-5.6 5.5-5.6 1.9 0 3.5 1 4.4 2.5 0.9-1.5 2.6-2.5 4.5-2.5 3.1 0 5.6 2.4 5.6 5.6C28.5 23.4 18 29 18 29z" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linejoin="round"/>
+          </svg>
+        `,
+        sparkle: `
+          <svg class="captcha-icon captcha-icon-sparkle" viewBox="0 0 36 36" role="img" aria-label="Sparkle cluster">
+            <path d="M18 8l1.8 4.2L24 14l-4.2 1.8L18 20l-1.8-4.2L12 14l4.2-1.8z" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linejoin="round"/>
+            <circle cx="27.5" cy="10.5" r="1.6" fill="currentColor"/>
+            <circle cx="10.5" cy="24.5" r="1.4" fill="currentColor"/>
+          </svg>
+        `,
+        question: `
+          <svg class="captcha-icon captcha-icon-question" viewBox="0 0 36 36" role="img" aria-label="Question mark">
+            <path d="M14.3 13.7a4.2 4.2 0 1 1 7.8 2.1c-1.4 2-3.7 2.2-3.7 4.4" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>
+            <circle cx="18" cy="25.9" r="1.5" fill="currentColor"/>
+          </svg>
+        `,
+      };
+
+      const tiles = [
+        { id: 1, kind: "green", svg: iconSvg.greenFlag, selected: false },
+        { id: 2, kind: "decoy", svg: iconSvg.grayFlag, selected: false },
+        { id: 3, kind: "green", svg: iconSvg.greenFlag, selected: false },
+        { id: 4, kind: "decoy", svg: iconSvg.heart, selected: false },
+        { id: 5, kind: "decoy", svg: iconSvg.sparkle, selected: false },
+        { id: 6, kind: "green", svg: iconSvg.greenFlag, selected: false },
+        { id: 7, kind: "decoy", svg: iconSvg.question, selected: false },
+        { id: 8, kind: "green", svg: iconSvg.greenFlag, selected: false },
+        { id: 9, kind: "decoy", svg: iconSvg.grayFlag, selected: false },
+      ];
+      const correct = new Set(tiles.filter((tile) => tile.kind === "green").map((tile) => tile.id));
+      let sabotagedOnce = false;
+
+      const tileMarkup = tiles
+        .map(
+          (tile) => `
+          <button
+            class="captcha-tile"
+            type="button"
+            data-tile="${tile.id}"
+            data-kind="${tile.kind}"
+            aria-label="Tile ${tile.id} ${tile.kind === "green" ? "green flag" : "decoy"}"
+            aria-pressed="false"
+          >
+            ${tile.svg}
+            <span class="sr-only">tile ${tile.id}</span>
+          </button>
+        `
+        )
+        .join("");
+      grid.innerHTML = tileMarkup;
+
+      const updateTile = (btn, on) => {
+        btn.classList.toggle("is-selected", on);
+        btn.setAttribute("aria-pressed", String(on));
+      };
+
+      const toggleTile = (btn) => {
+        const tile = Number(btn.dataset.tile);
+        const tileState = tiles.find((item) => item.id === tile);
+        if (!tileState) return;
+        const on = !tileState.selected;
+        if (on) {
+          tileState.selected = true;
+          announceLive("Tile selected");
+        } else {
+          tileState.selected = false;
+          announceLive("Tile unselected");
+        }
+        updateTile(btn, on);
+      };
+
+      bind(checkBtn, "click", () => {
+        spinner.classList.remove("hidden");
+        checkBtn.disabled = true;
+        setHint("Verifying...");
+        queueTimeout(() => {
+          spinner.classList.add("hidden");
+          challenge.classList.remove("hidden");
+          setHint("Pick the squares with green flags.");
+          announceLive("Captcha challenge shown");
+        }, 900);
+      });
+
+      Array.from(grid.querySelectorAll(".captcha-tile")).forEach((btn) => {
+        bind(btn, "click", () => toggleTile(btn));
+        bind(btn, "keydown", (event) => {
+          if (event.key === " " || event.key === "Enter") {
+            event.preventDefault();
+            toggleTile(btn);
+          }
+        });
+      });
+
+      bind(verifyBtn, "click", () => {
+        state.captchaAttempts += 1;
+        const selectedIds = tiles.filter((tile) => tile.selected).map((tile) => tile.id);
+        const onlyGreensSelected = selectedIds.every((id) => correct.has(id));
+        const allGreensSelected = Array.from(correct).every((id) =>
+          selectedIds.includes(id)
+        );
+        const matches = selectedIds.length === correct.size && onlyGreensSelected && allGreensSelected;
+
+        if (matches && !sabotagedOnce) {
+          sabotagedOnce = true;
+          const sabotageTile = 6;
+          const sabotageState = tiles.find((tile) => tile.id === sabotageTile);
+          if (sabotageState) sabotageState.selected = false;
+          const sabotageBtn = grid.querySelector(`[data-tile="${sabotageTile}"]`);
+          if (sabotageBtn) updateTile(sabotageBtn, false);
+          setHint("Almost. Try again.");
+          announceLive("Verification failed");
+          return;
+        }
+
+        if (!matches) {
+          setHint(`You're close, ${CONFIG.final.nickname}.`);
+          announceLive("Verification failed");
+          return;
+        }
+
+        setHint("Verified. Definitely not a robot. Definitely my Valentine.", true);
+        announceLive("Verification complete");
+        sfx.confirm();
+        nextLevel(null, 800);
+      });
+    },
+  },
+  {
     id: "final",
     render() {
       els.body.classList.add("final-mode");
-      els.eyebrow.textContent = "Final";
       els.buttonRow.classList.add("hidden");
       els.finalActions.classList.remove("hidden");
+      els.finalActions.classList.add("final-secondary-actions");
       els.finalExtras.classList.remove("hidden");
-      setHint("No gimmicks left.");
+      state.endTimeMs = Date.now();
+      setHint(`Last step, ${CONFIG.final.nickname}.`);
+      els.prompt.classList.add("final-soft");
 
       els.prompt.innerHTML = `
-        <p id="lineOne" class="type-line"></p>
-        <p id="lineTwo" class="type-line" style="margin-top:10px;"></p>
-        <p id="lineDetails" class="type-line" style="margin-top:14px; color: var(--muted);"></p>
+        <p id="lineOne" class="type-line soft-line"></p>
+        <p id="lineTwo" class="type-line soft-line"></p>
+        <p id="lineThree" class="type-line soft-line soft-line-muted"></p>
+        <button id="revealPlanBtn" class="btn btn-primary final-main-cta" type="button">${CONFIG.copy.revealPlanCta}</button>
       `;
 
       populateRunSummary();
-      setupMapWidget();
-      loadWeatherWidget();
+      populateCertificate();
 
-      const event = getEventContext();
       const lineOne = document.getElementById("lineOne");
       const lineTwo = document.getElementById("lineTwo");
-      const lineDetails = document.getElementById("lineDetails");
+      const lineThree = document.getElementById("lineThree");
+      const revealPlanBtn = document.getElementById("revealPlanBtn");
 
       const run = async () => {
         await typeLine(lineOne, CONFIG.copy.finalLead);
         await new Promise((resolve) => queueTimeout(resolve, CONFIG.levelSettings.revealPauseMs));
         await typeLine(lineTwo, CONFIG.copy.finalReveal);
         await new Promise((resolve) => queueTimeout(resolve, 220));
-        lineDetails.classList.add("show");
-        lineDetails.innerHTML = `
-          <div class="invite-details" aria-label="Invitation details">
-            <span class="invite-chip" aria-label="Date">
-              <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2.2" y="3.3" width="11.6" height="10.2" rx="1.8"></rect><line x1="5" y1="1.8" x2="5" y2="4.6"></line><line x1="11" y1="1.8" x2="11" y2="4.6"></line><line x1="2.2" y1="6.3" x2="13.8" y2="6.3"></line></svg>
-              ${CONFIG.final.date}
-            </span>
-            <span class="invite-chip" aria-label="Time">
-              <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.8"></circle><line x1="8" y1="8" x2="8" y2="5"></line><line x1="8" y1="8" x2="10.8" y2="9.5"></line></svg>
-              ${CONFIG.final.time}
-            </span>
-            <span class="invite-chip" aria-label="Location">
-              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 14.2s-4-4.1-4-7a4 4 0 1 1 8 0c0 2.9-4 7-4 7z"></path><circle cx="8" cy="7.2" r="1.4"></circle></svg>
-              ${CONFIG.final.location}
-            </span>
-          </div>
-        `;
-        announceLive(`${CONFIG.copy.finalReveal} ${event.whenLine}`);
+        await typeLine(lineThree, CONFIG.copy.finalPlanLead);
+        revealPlanBtn.focus();
+        announceLive(`${CONFIG.copy.finalReveal} Ready to reveal the plan.`);
       };
 
       run();
+
+      bind(revealPlanBtn, "click", () => openPlanModal(revealPlanBtn));
     },
     init() {
       bind(els.googleCalendarBtn, "click", openGoogleCalendar);
